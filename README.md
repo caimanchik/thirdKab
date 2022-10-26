@@ -131,7 +131,7 @@ public class RollerAgent : Agent
 
 https://user-images.githubusercontent.com/79734984/198014102-18ee9171-a9bd-437e-a0dd-bb1a74707073.mov
 
-Видео проверки работы модели
+Видео проверки работы обученной модели
 
 https://user-images.githubusercontent.com/79734984/198013508-da12956a-9006-4114-bd99-373f62dd8a98.mov
 
