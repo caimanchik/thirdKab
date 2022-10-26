@@ -123,13 +123,17 @@ public class RollerAgent : Agent
 Добавление объекту «сфера» компонентов Rigidbody, Decision Requester, Behavior Parameters и их настройка
 <img width="410" alt="Снимок экрана 2022-10-25 в 17 35 57" src="https://user-images.githubusercontent.com/79734984/197774831-562d6780-4654-4361-be3e-7eeae8276194.png">
 
-Запуск агента и [видео сцены с одной моделью «Плоскость-Сфера-Куб»](https://youtu.be/8TR0AsTdoAM)
+Запуск агента
 
 <img width="871" alt="Снимок экрана 2022-10-25 в 17 32 02" src="https://user-images.githubusercontent.com/79734984/197776257-2beb2f11-68c2-4b9f-ad5a-be8dbcbab767.png">
 
-[Видео запуска сцены с 27 моделями «Плоскость-Сфера-Куб»](https://youtu.be/-nKOP1dtIPc)
+Видео запуска сцены с 27 моделями «Плоскость-Сфера-Куб»
 
-[Видео проверки работы модели](https://youtu.be/bmh5rgU94Bo)
+https://user-images.githubusercontent.com/79734984/198014102-18ee9171-a9bd-437e-a0dd-bb1a74707073.mov
+
+Видео проверки работы модели
+
+https://user-images.githubusercontent.com/79734984/198013508-da12956a-9006-4114-bd99-373f62dd8a98.mov
 
 ### Выводы
 Чем больше моделей обучается одновременно, тем быстрее буден виден результат обучения
@@ -167,9 +171,104 @@ public class RollerAgent : Agent
 | `Behavior Parameters -> Vector Observation Space` | Прежде чем принять решение, агент собирает свои наблюдения о своем положении в мире. Векторное наблюдение - это вектор чисел с плавающей запятой, которые содержат релевантную информацию для принятия агентом решений. Если в параметрах указано `Space Size = 8`, это означает, что вектор признаков, содержащий наблюдения агента, содержит восемь элементов: компоненты x и z вращения куба агента и компоненты x, y и z относительного положения и скорости шара. |
 | `Behavior Parameters -> Actions` | Агенту даются инструкции в форме действий. ML-Agents Toolkit классифицирует действия на два типа: непрерывные и дискретные |
 
-## Задание 3
+## Задание 3. Доработка сцены и обучение ML-Agent таким образом, чтобы шар перемещался между двумя кубами разного цвета.
+Для начала был создан второй куб другого цвета. 
 
+Затем доработан скрипт на C#
+```c#
+using UnityEngine;
+using Unity.MLAgents;
+using Unity.MLAgents.Sensors;
+using Unity.MLAgents.Actuators;
 
+public class RollerAgent : Agent
+{
+    Rigidbody rBody;
+    
+    public GameObject FirstTarget;
+    public GameObject SecondTarget;
+    public float forceMultiplier = 10;
+    
+    private bool _canPickFirst = true;
+    private bool _canPickSecond = true;
+    
+    void Start() => rBody = GetComponent<Rigidbody>();
+
+    public override void OnEpisodeBegin()
+    {
+        if (transform.localPosition.y < 0)
+        {
+            rBody.angularVelocity = Vector3.zero;
+            rBody.velocity = Vector3.zero;
+            transform.localPosition = new Vector3(0, 0.5f, 0);
+        }
+        
+        _canPickFirst = _canPickSecond = true;
+        FirstTarget.SetActive(true);
+        SecondTarget.SetActive(true);
+        FirstTarget.transform.localPosition = new Vector3(Random.value * 8-4, 0.5f, Random.value * 8-4);
+        SecondTarget.transform.localPosition = new Vector3(Random.value * 8-4, 0.5f, Random.value * 8-4);
+    }
+    public override void CollectObservations(VectorSensor sensor)
+    {
+        sensor.AddObservation(FirstTarget.transform.localPosition);
+        sensor.AddObservation(SecondTarget.transform.localPosition);
+        sensor.AddObservation(_canPickFirst);
+        sensor.AddObservation(_canPickSecond);
+        sensor.AddObservation(transform.localPosition);
+        sensor.AddObservation(rBody.velocity.x);
+        sensor.AddObservation(rBody.velocity.z);
+    }
+
+    private bool CheckPicking(bool targetState, Transform target)
+    {
+        return targetState && Vector3.Distance(transform.localPosition, target.localPosition) < 1.42f;
+    }
+    
+    public override void OnActionReceived(ActionBuffers actionBuffers)
+    {
+        var controlSignal = Vector3.zero;
+        controlSignal.x = actionBuffers.ContinuousActions[0];
+        controlSignal.z = actionBuffers.ContinuousActions[1];
+        rBody.AddForce(controlSignal * forceMultiplier);
+
+        if (transform.localPosition.y < 0) 
+            EndEpisode();
+        
+        if (CheckPicking(_canPickFirst, FirstTarget.transform))
+        {
+            FirstTarget.SetActive(false);
+            _canPickFirst = false;
+            
+        }
+        if (CheckPicking(_canPickSecond, SecondTarget.transform))
+        {
+            SecondTarget.SetActive(false);
+            _canPickSecond = false;
+        }
+
+        if (!_canPickFirst && !_canPickSecond)
+        {
+            SetReward(1.0f);
+            EndEpisode();
+        }
+    }
+}
+```
+
+Для того, чтобы следить за второй целью, я добавил поле ```public GameObject SecondTarget```, которое принимает вторую цель. 
+
+Поля ```_canPickFirst``` и ```_canPickSecond``` являются флагами, которые означают, можно ли подобрать первую или вторую цель соответственно. 
+
+В методе ```OnEpisodeBegin()``` добавлен сброс всех приведенных выше значений. 
+
+в методе ```CollectObservations(VectorSensor sensor)``` добавил отслеживание за новыми сущностями, предварительно изменив значение ```Space Size``` на 13. 
+
+В методе ```OnActionReceived(ActionBuffers actionBuffers)``` модель получает поощрение, только если шар приблизился к обоим кубам.
+
+Видео работы обученной модели
+
+https://user-images.githubusercontent.com/79734984/198017512-c5573efc-6063-4c64-844d-6c9b59cfad2f.mov
 
 ## Выводы
 
